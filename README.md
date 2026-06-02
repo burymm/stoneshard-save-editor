@@ -5,8 +5,8 @@ GUI tool to edit player position in Stoneshard save files.
 ## Features
 
 - Auto-detects all saves across characters
-- Displays current coordinates (global localX/Y and local playerGridX/Y)
-- Edit coordinates and location
+- **Tab 1 — Position**: view and edit coordinates (global localX/Y, local playerGridX/Y) and location
+- **Tab 2 — Stats**: edit character attributes (STR, AGL, PRC, Vitality, WIL, HP, MP, XP, SP, AP)
 - Automatic backup before saving
 - Correctly recalculates checksum (salted hash)
 
@@ -37,8 +37,8 @@ GUI-редактор позиции персонажа для игры Stoneshar
 ## Возможности
 
 - Автоматическое определение всех сохранений
-- Просмотр текущих координат (глобальные localX/Y и локальные playerGridX/Y)
-- Редактирование координат и локации
+- **Вкладка 1 — Позиция**: просмотр и редактирование координат (глобальные localX/Y, локальные playerGridX/Y) и локации
+- **Вкладка 2 — Характеристики**: редактирование атрибутов (STR, AGL, PRC, Vitality, WIL, HP, MP, XP, SP, AP)
 - Автоматический бэкап перед сохранением
 - Корректный пересчёт контрольной суммы (hash с солью)
 
