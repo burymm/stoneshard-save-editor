@@ -5,8 +5,10 @@ GUI tool to edit player position in Stoneshard save files.
 ## Features
 
 - Auto-detects all saves across characters
-- **Tab 1 — Position**: view and edit coordinates (global localX/Y, local playerGridX/Y) and location
+- **Tab 1 — Position**: view and edit coordinates (global playerGridX/Y, local localX/Y) and location
 - **Tab 2 — Stats**: edit character attributes (STR, AGL, PRC, Vitality, WIL, HP, MP, XP, SP, AP)
+- **Tab 3 — Bonuses**: edit bonus stats (bCRT, bCRTD, bEVS, bHp, bMp, bmax_hp, bMP_Restoration, bSavvy, bVSN, bFMB)
+- **Tab 4 — Items**: browse inventory items in a tree view, edit any property (damage, resistance, charges, stack size, etc.) via double-click
 - Automatic backup before saving
 - Correctly recalculates checksum (salted hash)
 
@@ -37,8 +39,10 @@ GUI-редактор позиции персонажа для игры Stoneshar
 ## Возможности
 
 - Автоматическое определение всех сохранений
-- **Вкладка 1 — Позиция**: просмотр и редактирование координат (глобальные localX/Y, локальные playerGridX/Y) и локации
+- **Вкладка 1 — Позиция**: просмотр и редактирование координат (глобальные playerGridX/Y, локальные localX/Y) и локации
 - **Вкладка 2 — Характеристики**: редактирование атрибутов (STR, AGL, PRC, Vitality, WIL, HP, MP, XP, SP, AP)
+- **Вкладка 3 — Бонусы**: бонусные характеристики (bCRT, bCRTD, bEVS, bHp, bMp, bmax_hp, bMP_Restoration, bSavvy, bVSN, bFMB)
+- **Вкладка 4 — Предметы**: просмотр инвентаря в виде дерева, редактирование любых свойств (урон, сопротивления, заряды, количество, стек и т.д.) двойным кликом
 - Автоматический бэкап перед сохранением
 - Корректный пересчёт контрольной суммы (hash с солью)
 

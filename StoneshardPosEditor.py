@@ -1,23 +1,15 @@
-import zlib, json, re, hashlib, os, shutil, tkinter as tk
+import zlib, json, hashlib, os, shutil, tkinter as tk
 from tkinter import ttk, messagebox
 from pathlib import Path
 
 BASE_DIR = Path(os.environ.get('LOCALAPPDATA', '')) / 'StoneShard'
 CHARACTERS_DIR = BASE_DIR / 'characters_v1'
 
-FIELD_LABELS = {
-    'STR': 'Сила', 'AGL': 'Ловкость', 'PRC': 'Восприятие',
-    'Vitality': 'Телосложение', 'WIL': 'Сила воли',
-    'HP': 'HP', 'MP': 'MP', 'XP': 'XP', 'LVL': 'Уровень',
-    'SP': 'Очки навыков', 'AP': 'Очки статов',
-    'playerClass': 'Класс', 'nameKey': 'Имя',
-}
-
 class StoneshardEditor:
     def __init__(self, root):
         self.root = root
         self.root.title('Stoneshard Save Editor')
-        self.root.geometry('620x600')
+        self.root.geometry('800x680')
         self.root.resizable(False, False)
 
         self.current_save = None
@@ -36,7 +28,6 @@ class StoneshardEditor:
         main = ttk.Frame(self.root, padding=8)
         main.pack(fill=tk.BOTH, expand=True)
 
-        # Top bar: character & save selection
         top = ttk.Frame(main)
         top.pack(fill=tk.X)
         ttk.Label(top, text='Персонаж:').pack(side=tk.LEFT)
@@ -49,20 +40,14 @@ class StoneshardEditor:
         self.save_combo.pack(side=tk.LEFT, padx=4)
         self.save_combo.bind('<<ComboboxSelected>>', self._on_save_select)
 
-        # Notebook with tabs
         self.notebook = ttk.Notebook(main)
         self.notebook.pack(fill=tk.BOTH, expand=True, pady=(8, 0))
 
-        # --- Tab 1: Position ---
         self._build_position_tab()
-
-        # --- Tab 2: Stats ---
         self._build_stats_tab()
-
-        # --- Tab 3: Bonus Stats ---
         self._build_bonus_tab()
+        self._build_items_tab()
 
-        # Bottom bar: save + refresh + exit
         btn_frame = ttk.Frame(main)
         btn_frame.pack(fill=tk.X, pady=(6,0))
         ttk.Button(btn_frame, text='Сохранить', command=self._save).pack(side=tk.LEFT, padx=3)
@@ -88,10 +73,10 @@ class StoneshardEditor:
         self.pos_entries = {}
         fields = [
             ('location', 'Локация:'),
-            ('grid_x', 'Локальная X (playerGridX):'),
-            ('grid_y', 'Локальная Y (playerGridY):'),
-            ('local_x', 'Глобальная X (localX):'),
-            ('local_y', 'Глобальная Y (localY):'),
+            ('grid_x', 'Глобальная X (playerGridX):'),
+            ('grid_y', 'Глобальная Y (playerGridY):'),
+            ('local_x', 'Локальная X (localX):'),
+            ('local_y', 'Локальная Y (localY):'),
         ]
         for i, (key, label) in enumerate(fields):
             ttk.Label(edit_frame, text=label).grid(row=i, column=0, sticky='w')
@@ -105,7 +90,6 @@ class StoneshardEditor:
         tab = ttk.Frame(self.notebook, padding=10)
         self.notebook.add(tab, text='Характеристики')
 
-        # Player info
         info_row = ttk.Frame(tab)
         info_row.pack(fill=tk.X)
         ttk.Label(info_row, text='Имя:').pack(side=tk.LEFT)
@@ -155,7 +139,7 @@ class StoneshardEditor:
         tab = ttk.Frame(self.notebook, padding=10)
         self.notebook.add(tab, text='Бонусы')
 
-        frame = ttk.LabelFrame(tab, text='Бонусные характеристики (префикс b)', padding=8)
+        frame = ttk.LabelFrame(tab, text='Бонусные характеристики', padding=8)
         frame.pack(fill=tk.BOTH, expand=True)
 
         self.bonus_entries = {}
@@ -177,8 +161,202 @@ class StoneshardEditor:
             ent.grid(row=i, column=1, sticky='w', padx=5, pady=2)
             self.bonus_entries[key] = ent
 
-        ttk.Label(frame, text='Оставьте 0, если не нужно менять', foreground='gray').grid(
-            row=len(bonus_fields), column=0, columnspan=2, sticky='w', pady=(10, 0))
+    # ========== Items Tab ==========
+    def _build_items_tab(self):
+        tab = ttk.Frame(self.notebook, padding=10)
+        self.notebook.add(tab, text='Предметы')
+
+        paned = ttk.PanedWindow(tab, orient=tk.HORIZONTAL)
+        paned.pack(fill=tk.BOTH, expand=True)
+
+        # Left: item list
+        left_frame = ttk.LabelFrame(paned, text='Предметы', padding=4)
+        self.items_tree = ttk.Treeview(left_frame, columns=('slot',), show='tree',
+                                        selectmode='browse', height=20)
+        self.items_tree.heading('#0', text='Название')
+        self.items_tree.column('#0', width=220)
+        self.items_tree.heading('slot', text='Слот')
+        self.items_tree.column('slot', width=100)
+        scroll_items = ttk.Scrollbar(left_frame, orient=tk.VERTICAL, command=self.items_tree.yview)
+        self.items_tree.configure(yscrollcommand=scroll_items.set)
+        self.items_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scroll_items.pack(side=tk.RIGHT, fill=tk.Y)
+        self.items_tree.bind('<<TreeviewSelect>>', self._on_item_select)
+        paned.add(left_frame, weight=1)
+
+        # Right: item properties as tree
+        right_frame = ttk.LabelFrame(paned, text='Свойства предмета', padding=4)
+        self.prop_tree = ttk.Treeview(right_frame, columns=('value',), show='tree', height=20)
+        self.prop_tree.heading('#0', text='Свойство')
+        self.prop_tree.column('#0', width=250)
+        self.prop_tree.heading('value', text='Значение')
+        self.prop_tree.column('value', width=150)
+        scroll_prop = ttk.Scrollbar(right_frame, orient=tk.VERTICAL, command=self.prop_tree.yview)
+        self.prop_tree.configure(yscrollcommand=scroll_prop.set)
+        self.prop_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scroll_prop.pack(side=tk.RIGHT, fill=tk.Y)
+        self.prop_tree.bind('<Double-1>', self._on_prop_doubleclick)
+        paned.add(right_frame, weight=1)
+
+        self.selected_item_idx = None
+        self.prop_edit_popup = None
+        self.data = None
+
+    def _on_item_select(self, event):
+        sel = self.items_tree.selection()
+        if not sel:
+            return
+        item_id = sel[0]
+        if not item_id.startswith('item_'):
+            return
+        idx = int(item_id.split('_')[1])
+        self.selected_item_idx = idx
+        self._show_item_props(idx)
+
+    def _show_item_props(self, idx):
+        for row in self.prop_tree.get_children():
+            self.prop_tree.delete(row)
+
+        if idx < 0 or idx >= len(self.data['inventoryDataList']):
+            return
+        item = self.data['inventoryDataList'][idx]
+        if not isinstance(item, list) or len(item) < 2:
+            return
+        data = item[1] if isinstance(item[1], dict) else {}
+        self._build_prop_tree('', data)
+
+    def _build_prop_tree(self, parent, node):
+        if isinstance(node, dict):
+            for k, v in node.items():
+                node_id = f'{parent}.{k}' if parent else f'root.{k}'
+                if isinstance(v, (dict, list)):
+                    self.prop_tree.insert(parent, tk.END, iid=node_id, text=str(k),
+                                          values=(f'({"dict" if isinstance(v, dict) else "list"})',))
+                    self._build_prop_tree(node_id, v)
+                else:
+                    self.prop_tree.insert(parent, tk.END, iid=node_id, text=str(k), values=(str(v),))
+        elif isinstance(node, list):
+            for i, v in enumerate(node):
+                node_id = f'{parent}[{i}]'
+                if isinstance(v, (dict, list)):
+                    self.prop_tree.insert(parent, tk.END, iid=node_id, text=f'[{i}]',
+                                          values=(f'({"dict" if isinstance(v, dict) else "list"})',))
+                    self._build_prop_tree(node_id, v)
+                else:
+                    self.prop_tree.insert(parent, tk.END, iid=node_id, text=f'[{i}]', values=(str(v),))
+
+    def _on_prop_doubleclick(self, event):
+        sel = self.prop_tree.selection()
+        if not sel or not self.prop_tree.exists(sel[0]):
+            return
+        node_id = sel[0]
+        current_value = self.prop_tree.item(node_id, 'values')[0] if self.prop_tree.item(node_id, 'values') else ''
+
+        # Only allow editing leaf nodes (not dicts/lists)
+        children = self.prop_tree.get_children(node_id)
+        if children:
+            return  # skip non-leaf
+
+        # Parse the path from node_id to find the actual value
+        self._edit_prop_value(node_id, current_value)
+
+    def _edit_prop_value(self, node_id, current_val):
+        if self.prop_edit_popup:
+            self.prop_edit_popup.destroy()
+
+        popup = tk.Toplevel(self.root)
+        popup.title('Изменить значение')
+        popup.geometry('380x120')
+        popup.resizable(False, False)
+
+        ttk.Label(popup, text=f'{node_id}:').pack(pady=(8,0))
+        entry = ttk.Entry(popup, width=45)
+        entry.insert(0, current_val)
+        entry.pack(pady=5, padx=10, fill=tk.X)
+        entry.focus_set()
+        entry.selection_range(0, tk.END)
+
+        def save():
+            try:
+                new_val = entry.get().strip()
+                target = self.data['inventoryDataList'][self.selected_item_idx]
+                data_dict = target[1] if isinstance(target[1], dict) else target[0]
+                self._set_value_by_path(data_dict, node_id, self._parse_val(new_val))
+                self._show_item_props(self.selected_item_idx)
+                popup.destroy()
+            except Exception as ex:
+                messagebox.showerror('Ошибка', str(ex))
+
+        btn_frame = ttk.Frame(popup)
+        btn_frame.pack(pady=5)
+        ttk.Button(btn_frame, text='OK', command=save).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text='Отмена', command=popup.destroy).pack(side=tk.LEFT, padx=5)
+        entry.bind('<Return>', lambda e: save())
+        entry.bind('<Escape>', lambda e: popup.destroy())
+
+        self.prop_edit_popup = popup
+
+    def _set_value_by_path(self, obj, path, val):
+        """Set value in nested dict/list by dot/bracket path, e.g. root.Main[0].key or root.Main[11][6]"""
+        if path.startswith('root.'):
+            path = path[5:]
+        # Prepend dot so our regex works for the first segment too
+        path = '.' + path
+
+        import re as _re
+        tokens = _re.findall(r'\.([^.[]+)|\[(\d+)\]', path)
+        segments = []
+        for key_part, idx_part in tokens:
+            if key_part:
+                segments.append(('key', key_part))
+            else:
+                segments.append(('idx', int(idx_part)))
+
+        current = obj
+        for i, (seg_type, seg_val) in enumerate(segments):
+            is_last = i == len(segments) - 1
+            if is_last:
+                if seg_type == 'key':
+                    current[seg_val] = val
+                else:
+                    current[seg_val] = val
+                return
+            else:
+                current = current[seg_val]
+
+    def _parse_val(self, s):
+        if s.lower() == 'true':
+            return True
+        if s.lower() == 'false':
+            return False
+        try:
+            return int(s)
+        except ValueError:
+            pass
+        try:
+            return float(s)
+        except ValueError:
+            pass
+        return s
+
+    def _get_inventory(self):
+        return self.data['inventoryDataList'] if self.data else []
+
+    def _populate_items(self):
+        for row in self.items_tree.get_children():
+            self.items_tree.delete(row)
+        self.selected_item_idx = None
+        for row in self.prop_tree.get_children():
+            self.prop_tree.delete(row)
+
+        for idx, item in enumerate(self.data['inventoryDataList']):
+            if not isinstance(item, list) or len(item) < 2:
+                continue
+            item_id = item[0] if isinstance(item[0], str) else 'unknown'
+            data = item[1] if isinstance(item[1], dict) else {}
+            name = data.get('idName', item_id)
+            slot = item[9] if len(item) > 9 else 'N/A'
+            self.items_tree.insert('', tk.END, iid=f'item_{idx}', text=name, values=(slot,))
 
     # ========== Save discovery ==========
     def _scan_saves(self):
@@ -214,7 +392,9 @@ class StoneshardEditor:
     def _read_save(self):
         path = CHARACTERS_DIR / self.char_folder / self.save_folder / 'data.sav'
         if not path.exists():
-            self._log(f'Файл не найден: {path}')
+            msg = f'Файл не найден: {path}'
+            self._log(msg)
+            messagebox.showerror('Ошибка', msg)
             return
         try:
             with open(path, 'rb') as f:
@@ -233,20 +413,21 @@ class StoneshardEditor:
                         break
 
             self.current_json = text[:json_end]
+            self.data = json.loads(self.current_json)
             self.orig_json = None
             self.current_save = path
             self._refresh_all()
             self._log(f'Загружен: {self.char_folder}/{self.save_folder}')
         except Exception as e:
-            messagebox.showerror('Ошибка', f'Не удалось прочитать файл:\n{e}')
-            self._log('Ошибка чтения')
+            msg = f'Не удалось прочитать файл: {e}'
+            self._log(msg)
+            messagebox.showerror('Ошибка', msg)
 
     # ========== Refresh ==========
     def _refresh_all(self):
-        if not self.current_json:
+        if not self.data:
             return
-        data = json.loads(self.current_json)
-        cdm = data.get('characterDataMap', {})
+        cdm = self.data.get('characterDataMap', {})
         if not isinstance(cdm, dict):
             return
 
@@ -262,8 +443,8 @@ class StoneshardEditor:
         info = (
             f'Имя: {name}\n'
             f'Локация: {loc}  (чекпоинт: {cloc})\n'
-            f'Глобальные (localX/Y): X={lx}  Y={ly}\n'
-            f'Локальные (playerGridX/Y): X={gx}  Y={gy}'
+            f'Глобальные (playerGridX/Y): X={gx}  Y={gy}\n'
+            f'Локальные (localX/Y): X={lx}  Y={ly}'
         )
         self.info_text.configure(state='normal')
         self.info_text.delete(1.0, tk.END)
@@ -301,13 +482,21 @@ class StoneshardEditor:
             self.bonus_entries[key].delete(0, tk.END)
             self.bonus_entries[key].insert(0, str(val))
 
+        # Items tab
+        self._populate_items()
+
     # ========== Save ==========
     def _save(self):
-        if not self.current_json or not self.current_save:
+        if not self.data or not self.current_save:
             messagebox.showwarning('Нет данных', 'Сначала выберите сейв')
             return
 
-        # Build changes from both tabs
+        cdm = self.data.get('characterDataMap', {})
+        if not isinstance(cdm, dict):
+            messagebox.showerror('Ошибка', 'characterDataMap не найден')
+            return
+
+        # Read values from all tabs
         edits = {}
 
         # Position tab
@@ -331,15 +520,13 @@ class StoneshardEditor:
                 return
 
         # Bonus tab
-        bonus_vals = {}
         for key in self.bonus_entries:
             raw = self.bonus_entries[key].get().strip()
             if raw:
                 try:
-                    bonus_vals[key] = float(raw)
+                    cdm[key] = float(raw)
                 except ValueError:
-                    messagebox.showerror('Ошибка', f'Неверное значение для {key}')
-                    return
+                    pass
 
         # Backup
         save_dir = CHARACTERS_DIR / self.char_folder / self.save_folder
@@ -350,29 +537,20 @@ class StoneshardEditor:
         else:
             self._log('Бэкап уже существует, пропускаю')
 
-        # Apply edits to JSON text
-        new_json = self.current_json
-        new_json = re.sub(r'"localX":\s*[\d.]+', f'"localX": {edits["local_x"]}', new_json)
-        new_json = re.sub(r'"localY":\s*[\d.]+', f'"localY": {edits["local_y"]}', new_json)
-        new_json = re.sub(r'"playerGridX":\s*[\d.-]+', f'"playerGridX": {edits["grid_x"]}', new_json)
-        new_json = re.sub(r'"playerGridY":\s*[\d.-]+', f'"playerGridY": {edits["grid_y"]}', new_json)
-        new_json = re.sub(r'"locationTitleKey":\s*"[^"]*"', f'"locationTitleKey": "{edits["location"]}"', new_json)
-        new_json = re.sub(r'"checkpointLocation":\s*"[^"]*"', f'"checkpointLocation": "r_{edits["location"]}"', new_json)
+        # Apply position edits to data
+        cdm['localX'] = edits['local_x']
+        cdm['localY'] = edits['local_y']
+        cdm['playerGridX'] = edits['grid_x']
+        cdm['playerGridY'] = edits['grid_y']
+        cdm['locationTitleKey'] = edits['location']
+        cdm['checkpointLocation'] = f'r_{edits["location"]}'
 
+        # Apply stat edits to data
         for key, val in stat_vals.items():
-            pattern = rf'"{key}":\s*[\d.]+'
-            replacement = f'"{key}": {val}'
-            if key in ('HP', 'MP', 'XP', 'SP', 'AP', 'LVL'):
-                replacement = f'"{key}": {int(val)}'
-            new_json = re.sub(pattern, replacement, new_json)
-            if not re.search(pattern, new_json):
-                messagebox.showwarning('Предупреждение', f'Поле {key} не найдено в файле')
+            cdm[key] = int(val) if key in ('HP', 'MP', 'XP', 'SP', 'AP', 'LVL') else val
 
-        for key, val in bonus_vals.items():
-            if val != 0:
-                pattern = rf'"{key}":\s*-?[\d.]+'
-                replacement = f'"{key}": {val}'
-                new_json = re.sub(pattern, replacement, new_json)
+        # Serialize full JSON (compact format, matching game style)
+        new_json = json.dumps(self.data, separators=(',', ':'))
 
         # Calculate hash
         salt = f'stOne!characters_v1!{self.char_folder}!{self.save_folder}!shArd'
@@ -404,8 +582,11 @@ class StoneshardEditor:
                         break
 
             map_json = map_text[:map_json_end]
-            map_new_json = re.sub(r'"valid":\s*false', '"valid": true', map_json)
-            map_new_json = re.sub(r'"locationTitleKey":\s*"[^"]*"', f'"locationTitleKey": "{edits["location"]}"', map_new_json)
+            # rebuild map json clean
+            map_obj = json.loads(map_json)
+            map_obj['valid'] = True
+            map_obj['locationTitleKey'] = edits['location']
+            map_new_json = json.dumps(map_obj, separators=(',', ':'))
 
             map_md5_input = (map_new_json + salt).encode('utf-8')
             map_new_hash = hashlib.md5(map_md5_input).hexdigest()
