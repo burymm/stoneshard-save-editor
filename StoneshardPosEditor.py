@@ -17,7 +17,7 @@ class StoneshardEditor:
     def __init__(self, root):
         self.root = root
         self.root.title('Stoneshard Save Editor')
-        self.root.geometry('620x560')
+        self.root.geometry('620x600')
         self.root.resizable(False, False)
 
         self.current_save = None
@@ -58,6 +58,9 @@ class StoneshardEditor:
 
         # --- Tab 2: Stats ---
         self._build_stats_tab()
+
+        # --- Tab 3: Bonus Stats ---
+        self._build_bonus_tab()
 
         # Bottom bar: save + refresh + exit
         btn_frame = ttk.Frame(main)
@@ -146,6 +149,36 @@ class StoneshardEditor:
             ent = ttk.Entry(stats_frame, width=12)
             ent.grid(row=i, column=1, sticky='w', padx=5, pady=2)
             self.stat_entries[key] = ent
+
+    # ========== Bonus Stats Tab ==========
+    def _build_bonus_tab(self):
+        tab = ttk.Frame(self.notebook, padding=10)
+        self.notebook.add(tab, text='Бонусы')
+
+        frame = ttk.LabelFrame(tab, text='Бонусные характеристики (префикс b)', padding=8)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        self.bonus_entries = {}
+        bonus_fields = [
+            ('bCRT', 'bCRT (крит. шанс)'),
+            ('bCRTD', 'bCRTD (крит. урон)'),
+            ('bEVS', 'bEVS (уклонение)'),
+            ('bHp', 'bHp (HP)'),
+            ('bMp', 'bMp (MP)'),
+            ('bmax_hp', 'bmax_hp (макс. HP)'),
+            ('bMP_Restoration', 'bMP_Restoration (восст. MP)'),
+            ('bSavvy', 'bSavvy (смекалка)'),
+            ('bVSN', 'bVSN (восприятие)'),
+            ('bFMB', 'bFMB (физ.мощь)'),
+        ]
+        for i, (key, label) in enumerate(bonus_fields):
+            ttk.Label(frame, text=label).grid(row=i, column=0, sticky='w', pady=2)
+            ent = ttk.Entry(frame, width=12)
+            ent.grid(row=i, column=1, sticky='w', padx=5, pady=2)
+            self.bonus_entries[key] = ent
+
+        ttk.Label(frame, text='Оставьте 0, если не нужно менять', foreground='gray').grid(
+            row=len(bonus_fields), column=0, columnspan=2, sticky='w', pady=(10, 0))
 
     # ========== Save discovery ==========
     def _scan_saves(self):
@@ -260,6 +293,14 @@ class StoneshardEditor:
             self.stat_entries[key].delete(0, tk.END)
             self.stat_entries[key].insert(0, str(val))
 
+        # Bonus tab
+        for key in self.bonus_entries:
+            val = cdm.get(key, 0)
+            if isinstance(val, (int, float)):
+                val = round(val, 2)
+            self.bonus_entries[key].delete(0, tk.END)
+            self.bonus_entries[key].insert(0, str(val))
+
     # ========== Save ==========
     def _save(self):
         if not self.current_json or not self.current_save:
@@ -289,6 +330,17 @@ class StoneshardEditor:
                 messagebox.showerror('Ошибка', f'Неверное значение для {key}')
                 return
 
+        # Bonus tab
+        bonus_vals = {}
+        for key in self.bonus_entries:
+            raw = self.bonus_entries[key].get().strip()
+            if raw:
+                try:
+                    bonus_vals[key] = float(raw)
+                except ValueError:
+                    messagebox.showerror('Ошибка', f'Неверное значение для {key}')
+                    return
+
         # Backup
         save_dir = CHARACTERS_DIR / self.char_folder / self.save_folder
         bak_path = save_dir / 'data.sav.bak'
@@ -315,6 +367,12 @@ class StoneshardEditor:
             new_json = re.sub(pattern, replacement, new_json)
             if not re.search(pattern, new_json):
                 messagebox.showwarning('Предупреждение', f'Поле {key} не найдено в файле')
+
+        for key, val in bonus_vals.items():
+            if val != 0:
+                pattern = rf'"{key}":\s*-?[\d.]+'
+                replacement = f'"{key}": {val}'
+                new_json = re.sub(pattern, replacement, new_json)
 
         # Calculate hash
         salt = f'stOne!characters_v1!{self.char_folder}!{self.save_folder}!shArd'
