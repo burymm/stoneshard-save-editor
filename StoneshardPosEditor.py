@@ -9,7 +9,7 @@ class StoneshardEditor:
     def __init__(self, root):
         self.root = root
         self.root.title('Stoneshard Save Editor')
-        self.root.geometry('800x680')
+        self.root.geometry('820x680')
         self.root.resizable(False, False)
 
         self.current_save = None
@@ -47,6 +47,7 @@ class StoneshardEditor:
         self._build_stats_tab()
         self._build_bonus_tab()
         self._build_items_tab()
+        self._build_buffs_tab()
 
         btn_frame = ttk.Frame(main)
         btn_frame.pack(fill=tk.X, pady=(6,0))
@@ -358,6 +359,120 @@ class StoneshardEditor:
             slot = item[9] if len(item) > 9 else 'N/A'
             self.items_tree.insert('', tk.END, iid=f'item_{idx}', text=name, values=(slot,))
 
+    # ========== Buffs Tab ==========
+    def _build_buffs_tab(self):
+        tab = ttk.Frame(self.notebook, padding=10)
+        self.notebook.add(tab, text='Эффекты')
+
+        top_row = ttk.Frame(tab)
+        top_row.pack(fill=tk.X)
+        ttk.Button(top_row, text='Добавить эффект', command=self._add_buff).pack(side=tk.LEFT, padx=2)
+        ttk.Button(top_row, text='Удалить эффект', command=self._del_buff).pack(side=tk.LEFT, padx=2)
+
+        columns = ('id', 'duration', 'power', 'source', 'p4', 'p5', 'p6', 'p7')
+        self.buffs_tree = ttk.Treeview(tab, columns=columns, show='headings', height=18)
+        self.buffs_tree.heading('id', text='ID')
+        self.buffs_tree.column('id', width=160)
+        self.buffs_tree.heading('duration', text='Duration')
+        self.buffs_tree.column('duration', width=80)
+        self.buffs_tree.heading('power', text='Power')
+        self.buffs_tree.column('power', width=70)
+        self.buffs_tree.heading('source', text='Source')
+        self.buffs_tree.column('source', width=80)
+        self.buffs_tree.heading('p4', text='P4')
+        self.buffs_tree.column('p4', width=70)
+        self.buffs_tree.heading('p5', text='P5')
+        self.buffs_tree.column('p5', width=70)
+        self.buffs_tree.heading('p6', text='P6')
+        self.buffs_tree.column('p6', width=80)
+        self.buffs_tree.heading('p7', text='P7')
+        self.buffs_tree.column('p7', width=50)
+
+        scroll = ttk.Scrollbar(tab, orient=tk.VERTICAL, command=self.buffs_tree.yview)
+        self.buffs_tree.configure(yscrollcommand=scroll.set)
+        self.buffs_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, pady=(6,0))
+        scroll.pack(side=tk.RIGHT, fill=tk.Y, pady=(6,0))
+
+        self.buffs_tree.bind('<Double-1>', self._on_buff_doubleclick)
+
+    def _populate_buffs(self):
+        for row in self.buffs_tree.get_children():
+            self.buffs_tree.delete(row)
+
+        buffs = self.data.get('characterDataMap', {}).get('buffs', [])
+        for i in range(0, len(buffs), 8):
+            chunk = buffs[i:i+8]
+            # Pad to 8 if needed
+            while len(chunk) < 8:
+                chunk.append(0.0)
+            vals = [str(v) for v in chunk]
+            self.buffs_tree.insert('', tk.END, iid=f'buff_{i//8}', values=vals)
+
+    def _on_buff_doubleclick(self, event):
+        sel = self.buffs_tree.selection()
+        if not sel:
+            return
+        item_id = sel[0]
+        col = self.buffs_tree.identify_column(event.x)
+        col_idx = int(col.replace('#', '')) - 1
+        current = self.buffs_tree.item(item_id, 'values')[col_idx]
+
+        popup = tk.Toplevel(self.root)
+        popup.title('Изменить')
+        popup.geometry('350x100')
+        popup.resizable(False, False)
+
+        col_names = ['ID', 'Duration', 'Power', 'Source', 'P4', 'P5', 'P6', 'P7']
+        ttk.Label(popup, text=f'{col_names[col_idx]} :').pack(pady=(8,0))
+        entry = ttk.Entry(popup, width=45)
+        entry.insert(0, current)
+        entry.pack(pady=5, padx=10, fill=tk.X)
+        entry.focus_set()
+        entry.selection_range(0, tk.END)
+
+        def save():
+            try:
+                new_val = entry.get().strip()
+                idx = int(item_id.split('_')[1])
+                buffs = self.data['characterDataMap']['buffs']
+                offset = idx * 8 + col_idx
+                # Extend list if needed
+                while len(buffs) <= offset:
+                    buffs.append(0.0)
+                buffs[offset] = self._parse_val(new_val)
+                self._populate_buffs()
+                popup.destroy()
+            except Exception as ex:
+                messagebox.showerror('Ошибка', str(ex))
+
+        btn_frame = ttk.Frame(popup)
+        btn_frame.pack(pady=5)
+        ttk.Button(btn_frame, text='OK', command=save).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text='Отмена', command=popup.destroy).pack(side=tk.LEFT, padx=5)
+        entry.bind('<Return>', lambda e: save())
+        entry.bind('<Escape>', lambda e: popup.destroy())
+
+    def _add_buff(self):
+        buffs = self.data['characterDataMap'].get('buffs')
+        if buffs is None:
+            self.data['characterDataMap']['buffs'] = []
+            buffs = self.data['characterDataMap']['buffs']
+        new_buff = ['o_b_bless', 3600.0, 1.0, 'player', -4.0, -4.0, -4.0, 0.0]
+        buffs.extend(new_buff)
+        self._populate_buffs()
+        self._log('Эффект добавлен')
+
+    def _del_buff(self):
+        sel = self.buffs_tree.selection()
+        if not sel:
+            return
+        item_id = sel[0]
+        idx = int(item_id.split('_')[1])
+        buffs = self.data['characterDataMap']['buffs']
+        del buffs[idx*8:(idx+1)*8]
+        self._populate_buffs()
+        self._log('Эффект удалён')
+
     # ========== Save discovery ==========
     def _scan_saves(self):
         if not CHARACTERS_DIR.exists():
@@ -484,6 +599,9 @@ class StoneshardEditor:
 
         # Items tab
         self._populate_items()
+
+        # Buffs tab
+        self._populate_buffs()
 
     # ========== Save ==========
     def _save(self):
